@@ -93,7 +93,7 @@ class Reporter:
             log("⚠️ 没有可发送的截图文件。"); return
         try:
             photos = valid[:10]
-            files = [('photo', (os.path.basename(f), open(f, 'rb'), 'image/png')) for f in photos]
+            files = [(os.path.basename(f), (os.path.basename(f), open(f, 'rb'), 'image/png')) for f in photos]
             media = [{"type": "photo", "media": f"attach://{os.path.basename(f)}"} for f in photos]
             media[0]["caption"] = caption
             resp = requests.post(
