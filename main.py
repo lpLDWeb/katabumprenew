@@ -163,6 +163,21 @@ def login_to_dashboard(page, email, password):
                     return True
     return 'login' not in page.url.lower()
 
+def launch_page(co):
+    """创建浏览器实例，带重试（CI 环境 headed 启动慢/不稳）。"""
+    last_err = None
+    for i in range(1, 4):
+        try:
+            page = ChromiumPage(co)
+            page.set.timeouts(20)
+            log(f">>> [浏览器] 第 {i} 次启动成功")
+            return page
+        except Exception as e:
+            last_err = e
+            log(f"⚠️ [浏览器] 第 {i} 次启动失败: {e}")
+            time.sleep(5)
+    raise last_err
+
 def job():
     reporter = Reporter()
     page = None
@@ -180,7 +195,7 @@ def job():
         if path_silk: co.add_extension(path_silk); plugin_count += 1
         if path_cf: co.add_extension(path_cf); plugin_count += 1
         log(f">>> \[浏览器\] 已挂载插件数量: {plugin_count}")
-        co.auto_port(); page = ChromiumPage(co); page.set.timeouts(20)
+        co.auto_port(); page = launch_page(co)
         
         email = os.environ.get("KB_EMAIL"); password = os.environ.get("KB_PASSWORD"); target_url = os.environ.get("KB_RENEW_URL")
         if not all([email, password, target_url]): raise Exception("环境变量KB_EMAIL, KB_PASSWORD, KB_RENEW_URL未设置")
