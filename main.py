@@ -65,7 +65,7 @@ class Reporter:
             for i, item in enumerate(upload_resp.json()):
                 src = item.get('src')
                 if src: content_nodes.append({"tag": "figure", "children": [{"tag": "img", "attrs": {"src": src}}, {"tag": "figcaption", "children": [os.path.basename(valid_screenshots[i])]}]})
-            create_page_resp = self.session.post('https://api.telegra.ph/createPage', data={'access_token': 'd525af2963a7633918569c76192a83e0c03423b98471415053f40f0653d9', 'title': f'Katabump 续期调试报告 - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}', 'author_name': 'Auto-Renew Script', 'content': str(content_nodes).replace("'", '"')}, timeout=20)
+            create_page_resp = self.session.post('https://api.telegra.ph/createPage', data={'access_token': 'de9336fddf708860b5d8192468bb453adeb5891945d95db4e146d9fcbcf2', 'title': f'Katabump 续期调试报告 - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}', 'author_name': 'Auto-Renew Script', 'content': str(content_nodes).replace("'", '"')}, timeout=20)
             if create_page_resp.status_code == 200 and create_page_resp.json().get('ok'):
                 page_url = create_page_resp.json()['result']['url']; log(f"✅ 截图报告已生成: {page_url}"); return page_url
             else: return f"创建页面失败: {create_page_resp.text}"
