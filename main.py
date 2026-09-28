@@ -123,8 +123,28 @@ def analyze_page_alert(page):
     return "UNKNOWN"
 
 # ==================== 主程序（最终“黑盒等待”版） ====================
+def fill_login_form(page, email, password):
+    """填充登录表单并验证值已真正写入，最多重试 3 次。"""
+    for t in range(1, 4):
+        email_ele = page.ele('css:input[name="email"]', timeout=5)
+        pwd_ele = page.ele('css:input[name="password"]', timeout=5)
+        if email_ele: email_ele.input(email, clear=True)
+        if pwd_ele: pwd_ele.input(password, clear=True)
+        time.sleep(1)
+        try:
+            v1 = page.ele('css:input[name="email"]', timeout=2).attr('value') or ''
+            v2 = page.ele('css:input[name="password"]', timeout=2).attr('value') or ''
+            ok1 = v1 == email; ok2 = v2 == password
+            log(f">>> [登录] 填充校验第 {t} 次: 邮箱={'OK' if ok1 else 'FAIL'} 密码={'OK' if ok2 else 'FAIL'}")
+            if ok1 and ok2:
+                return True
+        except Exception as e:
+            log(f"⚠️ [登录] 填充校验异常: {e}")
+        time.sleep(1)
+    return False
+
 def login_to_dashboard(page, email, password):
-    """尝试登录，最多 3 次；处理登录页 captcha 挑战。返回是否登录成功。"""
+    """尝试登录，最多 3 次；勾选条款、处理 Turnstile 人机验证。返回是否登录成功。"""
     for i in range(1, 4):
         page.get('https://dashboard.katabump.com/auth/login')
         pass_full_page_shield(page)
@@ -133,9 +153,43 @@ def login_to_dashboard(page, email, password):
             logged = 'login' not in page.url.lower()
             log(f">>> [登录] 未找到登录表单，当前 URL: {page.url} | 标题: {page.title}")
             return logged
-        email_ele.input(email, clear=True)
-        page.ele('css:input[name="password"]').input(password, clear=True)
+        if not fill_login_form(page, email, password):
+            log("⚠️ [登录] 表单多次填充失败，仍继续尝试提交")
+
+        # 勾选条款 / 条例等 checkbox
+        try:
+            for cb in page.eles('css:input[type="checkbox"]', timeout=3):
+                try:
+                    if not cb.states.is_checked:
+                        cb.click(by_js=True)
+                        log(f">>> [登录] 已勾选 checkbox: {cb.attr('name') or cb.attr('id') or 'unknown'}")
+                except Exception as e:
+                    log(f"⚠️ [登录] checkbox 勾选失败: {e}")
+        except Exception as e:
+            log(f"⚠️ [登录] 未找到 checkbox: {e}")
+
         time.sleep(3)  # 等待 Turnstile 等验证组件初始化
+
+        # 等待 Turnstile 自动通过（headed 模式下通常会自动完成）
+        for _ in range(15):
+            try:
+                tr = page.ele('css:input[name="cf-turnstile-response"]', timeout=1)
+                if tr and tr.attr('value'):
+                    log(">>> [登录] Turnstile 验证已通过"); break
+            except Exception:
+                pass
+            time.sleep(1)
+        else:
+            # 未自动通过，尝试点击 Turnstile 内 checkbox
+            try:
+                frame = page.get_frame('xpath://iframe[contains(@src,"challenges.cloudflare.com")]', timeout=3)
+                if frame:
+                    box = frame.ele('css:.ctp-checkbox-label', timeout=5) or frame.ele('css:input[type="checkbox"]', timeout=5)
+                    if box: box.click(); log(">>> [登录] 已点击 Turnstile checkbox")
+                    time.sleep(3)
+            except Exception as e:
+                log(f"⚠️ [登录] Turnstile 点击失败: {e}")
+
         page.ele('css:button#submit').click(by_js=True)
         try:
             page.wait.url_change('login', exclude=True, timeout=20)
@@ -148,7 +202,6 @@ def login_to_dashboard(page, email, password):
         if 'captcha' in url_lower:
             log(f"⚠️ [登录] 第 {i} 次触发 captcha，等待插件/Turnstile 处理 15s...")
             time.sleep(15)
-            # 等待期间 Turnstile 可能已自动通过，重新提交一次
             if 'login' not in page.url.lower():
                 return True
             btn = page.ele('css:button#submit', timeout=5)
