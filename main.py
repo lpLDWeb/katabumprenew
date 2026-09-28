@@ -71,10 +71,6 @@ class Reporter:
             else: return f"创建页面失败: {create_page_resp.text}"
         except Exception as e:
             log(f"❌ 上传异常: {e}"); return f"上传截图时发生异常: {e}"
-        finally:
-            for f in self.screenshots:
-                try: os.remove(f)
-                except: pass
 
     def send_telegram_notification(self, message: str):
         token, chat_id = "8918392736:AAHCiL11BC-eonwDwPHE3m24EN8LKRCMKKE", "6007708093"
@@ -247,6 +243,10 @@ def job():
             
         reporter.send_telegram_notification(notification_message)
         reporter.send_screenshots_to_telegram(f"任务状态: {final_status_message}")
+        
+        for f in reporter.screenshots:
+            try: os.remove(f)
+            except: pass
         
         if page: page.quit()
         
