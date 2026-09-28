@@ -35,6 +35,9 @@ jobs:
           KB_PASSWORD: ${{ secrets.KB_PASSWORD }}
           KB_RENEW_URL: ${{ secrets.KB_RENEW_URL }}
           KB_HEADED: '1'
+          DISPLAY: ':99'
         run: |
-          # 带虚拟显示器运行，避免 headless 被 Turnstile 拦截
-          xvfb-run -a -s "-screen 0 1920x1080x24" python -u main.py
+          # 手动启动虚拟显示器（比 xvfb-run 更稳），headed 模式避免 Turnstile 拦截
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 3
+          python -u main.py
