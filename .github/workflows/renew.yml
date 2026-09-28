@@ -19,10 +19,12 @@ jobs:
           python-version: '3.10'
 
       # 👇👇👇 这一步绝对不能少！没有它 DrissionPage 启动不了 👇👇👇
-      - name: Install Chrome
+      # xvfb 用于提供虚拟显示器，让 Chrome 以 headed 模式运行，
+      # 这样 Turnstile 人机验证更有可能自动通过
+      - name: Install Chrome & xvfb
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+          sudo apt-get install -y google-chrome-stable xvfb
 
       - name: Install Dependencies
         run: pip install DrissionPage requests
@@ -32,6 +34,7 @@ jobs:
           KB_EMAIL: ${{ secrets.KB_EMAIL }}
           KB_PASSWORD: ${{ secrets.KB_PASSWORD }}
           KB_RENEW_URL: ${{ secrets.KB_RENEW_URL }}
+          KB_HEADED: '1'
         run: |
-          # 启动 Python (带 -u 参数实时输出)
-          python -u main.py
+          # 带虚拟显示器运行，避免 headless 被 Turnstile 拦截
+          xvfb-run -a -s "-screen 0 1920x1080x24" python -u main.py
