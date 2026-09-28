@@ -85,6 +85,28 @@ class Reporter:
         except Exception as e:
             log(f"❌ Telegram 发送异常: {e}")
 
+    def send_screenshots_to_telegram(self, caption: str = ""):
+        """直接把截图通过 Telegram Bot 发给用户，不依赖 Telegra.ph。"""
+        token, chat_id = "8918392736:AAHCiL11BC-eonwDwPHE3m24EN8LKRCMKKE", "6007708093"
+        valid = [f for f in self.screenshots if os.path.exists(f)]
+        if not valid:
+            log("⚠️ 没有可发送的截图文件。"); return
+        try:
+            photos = valid[:10]
+            files = [('photo', (os.path.basename(f), open(f, 'rb'), 'image/png')) for f in photos]
+            media = [{"type": "photo", "media": f"attach://{os.path.basename(f)}"} for f in photos]
+            media[0]["caption"] = caption
+            resp = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMediaGroup",
+                data={"chat_id": chat_id, "media": str(media).replace("'", '"')},
+                files=files, timeout=60)
+            if resp.status_code == 200 and resp.json().get('ok'):
+                log(f"✅ 已发送 {len(photos)} 张截图到 Telegram。")
+            else:
+                log(f"⚠️ 截图发送失败: {resp.text[:200]}")
+        except Exception as e:
+            log(f"❌ 截图发送异常: {e}")
+
 # ==================== 核心逻辑 (保持不变) ====================
 def pass_full_page_shield(page):
     for _ in range(3):
@@ -105,6 +127,33 @@ def analyze_page_alert(page):
     return "UNKNOWN"
 
 # ==================== 主程序（最终“黑盒等待”版） ====================
+def login_to_dashboard(page, email, password):
+    """尝试登录，最多 3 次；处理登录页 captcha 挑战。返回是否登录成功。"""
+    for i in range(1, 4):
+        page.get('https://dashboard.katabump.com/auth/login')
+        pass_full_page_shield(page)
+        email_ele = page.ele('css:input[name="email"]', timeout=10)
+        if not email_ele:
+            logged = 'login' not in page.url.lower()
+            log(f">>> [登录] 未找到登录表单，当前 URL: {page.url} | 标题: {page.title}")
+            return logged
+        email_ele.input(email, clear=True)
+        page.ele('css:input[name="password"]').input(password, clear=True)
+        time.sleep(3)  # 等待 Turnstile 等验证组件初始化
+        page.ele('css:button#submit').click(by_js=True)
+        try:
+            page.wait.url_change('login', exclude=True, timeout=20)
+        except Exception:
+            pass
+        url_lower = page.url.lower()
+        log(f">>> [登录] 第 {i} 次后 URL: {url_lower} | 标题: {page.title}")
+        if 'login' not in url_lower:
+            return True
+        if 'captcha' in url_lower:
+            log(f"⚠️ [登录] 第 {i} 次触发 captcha，等待插件/Turnstile 处理 10s...")
+            time.sleep(10)
+    return 'login' not in page.url.lower()
+
 def job():
     reporter = Reporter()
     page = None
@@ -124,13 +173,12 @@ def job():
         email = os.environ.get("KB_EMAIL"); password = os.environ.get("KB_PASSWORD"); target_url = os.environ.get("KB_RENEW_URL")
         if not all([email, password, target_url]): raise Exception("环境变量KB_EMAIL, KB_PASSWORD, KB_RENEW_URL未设置")
 
-        log(">>> \[Step 1\] 登录..."); page.get('https://dashboard.katabump.com/auth/login'); pass_full_page_shield(page)
+        log(">>> [Step 1] 登录..."); page.get('https://dashboard.katabump.com/auth/login'); pass_full_page_shield(page)
         reporter.add_screenshot(page, "01_login_page")
         if page.ele('css:input[name="email"]'):
-            page.ele('css:input[name="email"]').input(email); page.ele('css:input[name="password"]').input(password); page.ele('css:button#submit').click()
-            page.wait.url_change('login', exclude=True, timeout=20)
-            log(f">>> [登录] 当前 URL: {page.url} | 标题: {page.title}")
-            if 'login' in page.url.lower(): log("⚠️ [登录] URL 仍含 login，登录可能失败！")
+            if not login_to_dashboard(page, email, password):
+                log("❌ [登录] 多次尝试后仍未成功登录，任务中止")
+                raise Exception("登录失败（可能被 captcha 拦截）")
         
         max_retries = 3; success = False
         for attempt in range(1, max_retries + 1):
@@ -198,6 +246,7 @@ def job():
             notification_message = f"❌ **Katabump 续期任务失败**\n\n<b>错误:</b>\n<code>{final_status_message}</code>\n\n<b>调试报告:</b>\n{report_url}"
             
         reporter.send_telegram_notification(notification_message)
+        reporter.send_screenshots_to_telegram(f"任务状态: {final_status_message}")
         
         if page: page.quit()
         
