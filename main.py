@@ -146,8 +146,21 @@ def login_to_dashboard(page, email, password):
         if 'login' not in url_lower:
             return True
         if 'captcha' in url_lower:
-            log(f"⚠️ [登录] 第 {i} 次触发 captcha，等待插件/Turnstile 处理 10s...")
-            time.sleep(10)
+            log(f"⚠️ [登录] 第 {i} 次触发 captcha，等待插件/Turnstile 处理 15s...")
+            time.sleep(15)
+            # 等待期间 Turnstile 可能已自动通过，重新提交一次
+            if 'login' not in page.url.lower():
+                return True
+            btn = page.ele('css:button#submit', timeout=5)
+            if btn:
+                log(f">>> [登录] 重新提交登录表单 (第 {i} 次)...")
+                btn.click(by_js=True)
+                try:
+                    page.wait.url_change('login', exclude=True, timeout=20)
+                except Exception:
+                    pass
+                if 'login' not in page.url.lower():
+                    return True
     return 'login' not in page.url.lower()
 
 def job():
@@ -159,7 +172,10 @@ def job():
         reporter.send_telegram_notification("🚀 **Katabump 自动续期任务开始...**")
         
         path_silk = download_silk(); path_cf = download_cf_autoclick()
-        co = ChromiumOptions(); co.set_argument('--headless=new'); co.set_argument('--no-sandbox'); co.set_argument('--disable-gpu'); co.set_argument('--disable-dev-shm-usage'); co.set_argument('--window-size=1920,1080'); co.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+        co = ChromiumOptions()
+        if os.environ.get("KB_HEADED") != "1":
+            co.set_argument('--headless=new')
+        co.set_argument('--no-sandbox'); co.set_argument('--disable-gpu'); co.set_argument('--disable-dev-shm-usage'); co.set_argument('--window-size=1920,1080'); co.set_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'); co.set_argument('--disable-blink-features=AutomationControlled')
         plugin_count = 0
         if path_silk: co.add_extension(path_silk); plugin_count += 1
         if path_cf: co.add_extension(path_cf); plugin_count += 1
