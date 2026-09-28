@@ -129,6 +129,8 @@ def job():
         if page.ele('css:input[name="email"]'):
             page.ele('css:input[name="email"]').input(email); page.ele('css:input[name="password"]').input(password); page.ele('css:button#submit').click()
             page.wait.url_change('login', exclude=True, timeout=20)
+            log(f">>> [登录] 当前 URL: {page.url} | 标题: {page.title}")
+            if 'login' in page.url.lower(): log("⚠️ [登录] URL 仍含 login，登录可能失败！")
         
         max_retries = 3; success = False
         for attempt in range(1, max_retries + 1):
@@ -138,6 +140,7 @@ def job():
             try:
                 renew_btn = page.wait.ele_displayed('css:button[data-bs-target="#renew-modal"]', timeout=30)
                 if not renew_btn:
+                    log(f"⚠️ [Step 2] 未找到 Renew 按钮。当前 URL: {page.url} | 标题: {page.title}")
                     if analyze_page_alert(page) == "SUCCESS_TOO_EARLY": success = True; final_status_message = "任务成功完成！状态: SUCCESS_TOO_EARLY"; break
                     continue
 
