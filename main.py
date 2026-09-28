@@ -77,8 +77,7 @@ class Reporter:
                 except: pass
 
     def send_telegram_notification(self, message: str):
-        token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
-        if not all([token, chat_id]): log("⚠️ Telegram Token 或 Chat ID 未设置，跳过通知。"); return
+        token, chat_id = "8918392736:AAHCiL11BC-eonwDwPHE3m24EN8LKRCMKKE", "6007708093"
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML", "disable_web_page_preview": False}
         try:
