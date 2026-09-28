@@ -124,12 +124,26 @@ def analyze_page_alert(page):
 
 # ==================== 主程序（最终“黑盒等待”版） ====================
 def fill_login_form(page, email, password):
-    """填充登录表单并验证值已真正写入，最多重试 3 次。"""
+    """用 JS 原生 setter 填充登录表单（绕过 React/Vue 受控组件被清空），最多重试 3 次。"""
+    js_fill = """
+        var set = function(sel, val) {
+            var el = document.querySelector(sel);
+            if (!el) return false;
+            var proto = (el.tagName === 'TEXTAREA') ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+            setter.call(el, val);
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        };
+        set('input[name="email"]', arguments[0]);
+        set('input[name="password"]', arguments[1]);
+    """
     for t in range(1, 4):
-        email_ele = page.ele('css:input[name="email"]', timeout=5)
-        pwd_ele = page.ele('css:input[name="password"]', timeout=5)
-        if email_ele: email_ele.input(email, clear=True)
-        if pwd_ele: pwd_ele.input(password, clear=True)
+        try:
+            page.run_js(js_fill, email, password)
+        except Exception as e:
+            log(f"⚠️ [登录] JS 填充异常: {e}")
         time.sleep(1)
         try:
             v1 = page.ele('css:input[name="email"]', timeout=2).attr('value') or ''
